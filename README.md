@@ -26,12 +26,14 @@ intervention strategies.
 
 #### K-mean clustering 
 With given features, the data was clustered in 2 groups, then we analyzed the group based on the features to identify which group is prone to be identifed as "having AD".
+
 _For details, please navigate "AD project.ipynb" and "analyze-after-clustering.ipynb" file_
 #### Supervised learning models
 - Linear Regeression
 - LASSO Regression
 - Support Vector Regressor
 - Random Forest Regressor
+  
 _For details, please navigate "Supervised learning.ipynb" file_
 
 ### _For details and outcome summary, please navigate "AD poster.pdf" file_
