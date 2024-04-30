@@ -8,16 +8,17 @@ output: html_document
 ```{r}
 library(readr)
 library(stats)
-#install.packages("fastDummies")
-library(fastDummies)
 library(Metrics)
 library(rsq)
 library(ggplot2)
 library(broom)
+library(statmod)
+library(dplyr)
+#install.packages("fastDummies")
+library(fastDummies)
 ```
 
 ```{r}
-# Read the CSV file into a data.table (assuming 'selected_features.csv' is in the working directory)
 df <- read.csv("Data/selected_features.csv")
 df <- df[, -which(names(df) == "NACCID")]
 
@@ -25,12 +26,16 @@ df <- df[, -which(names(df) == "NACCID")]
 # Specify the columns to one-hot encode
 columns_to_encode <- c('SEX', 'TOBAC30', 'TOBAC100', 'ALCOHOL', 'DIABETES', 'HYPERTEN', 'CVHATT', 'DECIN', 'MOSLOW', 'MEMORY', 'SPEECH', 'BILLS', 'TRAVEL', 'MOFALLS', 'MOTREM')
 
-# One-hot encode the specified columns
+for (col_name in columns_to_encode) {
+  df[[col_name]] <- factor(df[[col_name]])
+}
+
+# One-hot encode 
 df_encoded <- dummy_cols(df, select_columns = columns_to_encode)
 df_encoded <- df_encoded[, !colnames(df) %in% columns_to_encode]
 
-# Print the first few rows of df_encoded to check the encoding
-head(df_encoded)
+
+df_encoded
 
 
 ```
@@ -56,10 +61,11 @@ ss_total <- sum((actual_values - mean(actual_values))^2)
 ss_residual <- sum((actual_values - predicted_values)^2)
 r_squared <- 1 - (ss_residual / ss_total)
 mae <- mean(abs(actual_values - predicted_values))
+mse <- mean((test_data$CDRSUM - predicted_values)^2)
 
+print(paste("Mean Squared Error (MSE):", mse))
 print(paste("R-squared:", r_squared))
 print(paste("Mean Absolute Error (MAE):", mae))
-print(paste("Mean Squared Error (MSE):", mse))
 
 ```
 
@@ -70,6 +76,8 @@ est <- coef(tweedie_model)[-1][1:length(coef(tweedie_model)[-1])]
 p <- tidy(tweedie_model)$p.value[2:length(tidy(tweedie_model)$p.value)]        #to extract all including NA value
 data_for_plot<- do.call(rbind, Map(data.frame, Fea=fea, Est = est, p_value =p))
 data_for_plot$alpha <- ifelse(data_for_plot$p_value<0.001,'***', ifelse(0.001 <data_for_plot$p_value & data_for_plot$p_value<0.01,'**', ifelse(0.01<data_for_plot$p_value& data_for_plot$p_value<0.05,'*', ifelse(0.05<data_for_plot$p_value& data_for_plot$p_value<0.1,'.', ' '))))
+#extract (+)
+data_for_plot <- data_for_plot %>% filter(Est>0)
 data_for_plot
 ```
 
@@ -84,5 +92,23 @@ ggplot(data_for_plot, aes(x = Fea, y = Est)) +
   theme_classic() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
 
+
+```
+
+```{r}
+# First, calculate the order based on the Est values
+order_data <- data_for_plot[order(data_for_plot$Est), ]
+order_data$Fea <- factor(order_data$Fea, levels = order_data$Fea)
+
+# Now plot the graph with the ordered data
+ggplot(order_data, aes(x = Est, y = Fea)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = alpha, size = 4), hjust = 1.5, size = 3) +  
+  labs(
+    x = "Predicted Contribution",
+    y = "Features"
+  ) +
+  theme_classic() + 
+  theme(axis.text.y = element_text(angle = 0, hjust = 1))
 
 ```
