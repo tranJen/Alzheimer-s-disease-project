@@ -1,0 +1,88 @@
+---
+title: "GLM"
+author: "Suong Tran"
+date: "2024-04-30"
+output: html_document
+---
+
+```{r}
+library(readr)
+library(stats)
+#install.packages("fastDummies")
+library(fastDummies)
+library(Metrics)
+library(rsq)
+library(ggplot2)
+library(broom)
+```
+
+```{r}
+# Read the CSV file into a data.table (assuming 'selected_features.csv' is in the working directory)
+df <- read.csv("Data/selected_features.csv")
+df <- df[, -which(names(df) == "NACCID")]
+
+
+# Specify the columns to one-hot encode
+columns_to_encode <- c('SEX', 'TOBAC30', 'TOBAC100', 'ALCOHOL', 'DIABETES', 'HYPERTEN', 'CVHATT', 'DECIN', 'MOSLOW', 'MEMORY', 'SPEECH', 'BILLS', 'TRAVEL', 'MOFALLS', 'MOTREM')
+
+# One-hot encode the specified columns
+df_encoded <- dummy_cols(df, select_columns = columns_to_encode)
+df_encoded <- df_encoded[, !colnames(df) %in% columns_to_encode]
+
+# Print the first few rows of df_encoded to check the encoding
+head(df_encoded)
+
+
+```
+
+```{r}
+train_indices <- sample(nrow(df_encoded), 0.7 * nrow(df_encoded))  # 70% for training, 30% for testing
+train_data <- df_encoded[train_indices, ]
+test_data <- df_encoded[-train_indices, ]
+
+tweedie_model <- glm(CDRSUM ~ ., data = train_data, family = tweedie(var.power = 1, link.power = 0))
+
+summary(tweedie_model)
+
+# Predict 
+predicted_values <- predict(tweedie_model, newdata = test_data, type = "response")
+
+```
+
+```{r}
+#metrics
+actual_values <- test_data$CDRSUM
+ss_total <- sum((actual_values - mean(actual_values))^2)
+ss_residual <- sum((actual_values - predicted_values)^2)
+r_squared <- 1 - (ss_residual / ss_total)
+mae <- mean(abs(actual_values - predicted_values))
+
+print(paste("R-squared:", r_squared))
+print(paste("Mean Absolute Error (MAE):", mae))
+print(paste("Mean Squared Error (MSE):", mse))
+
+```
+
+```{r}
+fea <- names(coef(tweedie_model))[2:length(names(coef(tweedie_model)))]      #get features' names
+
+est <- coef(tweedie_model)[-1][1:length(coef(tweedie_model)[-1])]      
+p <- tidy(tweedie_model)$p.value[2:length(tidy(tweedie_model)$p.value)]        #to extract all including NA value
+data_for_plot<- do.call(rbind, Map(data.frame, Fea=fea, Est = est, p_value =p))
+data_for_plot$alpha <- ifelse(data_for_plot$p_value<0.001,'***', ifelse(0.001 <data_for_plot$p_value & data_for_plot$p_value<0.01,'**', ifelse(0.01<data_for_plot$p_value& data_for_plot$p_value<0.05,'*', ifelse(0.05<data_for_plot$p_value& data_for_plot$p_value<0.1,'.', ' '))))
+data_for_plot
+```
+
+```{r}
+# Create the bar plot
+ggplot(data_for_plot, aes(x = Fea, y = Est)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = alpha, size = 4), vjust = -0.5, size = 3) +  
+  labs(
+       x = "Features",
+       y = "Predicted Contribution") +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+```
